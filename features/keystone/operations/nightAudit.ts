@@ -83,10 +83,15 @@ export async function closeHotelBusinessDate(
     const propertySettings = await prisma.hotelSettings.findUnique({ where: { id: 1 }, select: { timeZone: true } });
     if (!propertySettings?.timeZone) throw new Error('Property time zone is not configured.');
 
+    // Each earlier audit already required its own departures to be settled, so only today's
+    // check-outs (and anyone still in house past departure) are checked; a later refund on an
+    // older stay does not hold the hotel's date.
     const departureCandidates = await prisma.booking.findMany({
       where: {
-        status: { in: ['checked_in', 'checked_out'] },
-        checkOutDate: { lte: businessDate },
+        OR: [
+          { status: 'checked_in', checkOutDate: { lte: businessDate } },
+          { status: 'checked_out', checkOutDate: { gte: businessDate, lt: nextBusinessDate } },
+        ],
       },
       include: {
         folio: { include: { entries: true } },
@@ -103,7 +108,7 @@ export async function closeHotelBusinessDate(
     });
     if (unsettledDepartures.length) {
       throw new Error(
-        `Night audit refused: ${unsettledDepartures.length} departing reservations are not checked out with settled, closed folios.`
+        `Night audit refused: ${unsettledDepartures.length} departing reservations are not checked out with settled, closed folios (${unsettledDepartures.slice(0, 10).map((booking: any) => booking.confirmationNumber).join(', ')}${unsettledDepartures.length > 10 ? ', …' : ''}).`
       );
     }
 
