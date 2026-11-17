@@ -204,19 +204,23 @@ export async function verifyBookingEmailOwnership(
     throw new Error(BOOKING_ACCESS_DENIED_MESSAGE);
   }
 
-  // Looking the booking up again (another device) keeps the current lookup token, so earlier devices stay signed in.
-  const current = await context.prisma.booking.findUnique({ where: { id: booking.id }, select: { guestAccessTokenHash: true, guestAccessTokenIssuedAt: true } });
+  setGuestBookingAccess(context, booking.id, await sharedGuestAccessToken(context.prisma, booking.id));
+}
+
+/**
+ * The booking's guest token, the same for every device: the current one when it was issued this way,
+ * otherwise a new one (which replaces an older random token once).
+ */
+export async function sharedGuestAccessToken(prisma: any, bookingId: string) {
+  const current = await prisma.booking.findUnique({ where: { id: bookingId }, select: { guestAccessTokenHash: true, guestAccessTokenIssuedAt: true } });
   if (current?.guestAccessTokenIssuedAt) {
-    const token = lookupAccessToken(booking.id, current.guestAccessTokenIssuedAt);
-    if (guestAccessTokenMatches(current.guestAccessTokenHash, token)) {
-      setGuestBookingAccess(context, booking.id, token);
-      return;
-    }
+    const token = lookupAccessToken(bookingId, current.guestAccessTokenIssuedAt);
+    if (guestAccessTokenMatches(current.guestAccessTokenHash, token)) return token;
   }
   const issuedAt = new Date();
-  const token = lookupAccessToken(booking.id, issuedAt);
-  await context.prisma.booking.update({ where: { id: booking.id }, data: { guestAccessTokenHash: hashGuestAccessToken(token), guestAccessTokenIssuedAt: issuedAt } });
-  setGuestBookingAccess(context, booking.id, token);
+  const token = lookupAccessToken(bookingId, issuedAt);
+  await prisma.booking.update({ where: { id: bookingId }, data: { guestAccessTokenHash: hashGuestAccessToken(token), guestAccessTokenIssuedAt: issuedAt } });
+  return token;
 }
 
 export async function ensureBookingHasGuestAccess(context: any, bookingId: string) {

@@ -2,7 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { findHotelLifecycleReplay, lockHotelLifecycle, recordHotelLifecycleEvent } from '../lib/hotelLifecycle';
 import { runSerializableTransaction } from '../lib/serializableTransaction';
 
-import { createGuestAccessToken, hashGuestAccessToken, setGuestBookingAccess } from '../lib/guestBookingAccess';
+import { setGuestBookingAccess, sharedGuestAccessToken } from '../lib/guestBookingAccess';
 import { ensureReservationSnapshots } from '../folios/reservationSnapshots';
 import { lockRoomInventory } from '../inventory/roomNightLocks';
 import { ensureBookingFolio } from '../folios/bookingFolio';
@@ -45,7 +45,7 @@ async function createStorefrontBooking(
   const guestEmail = required(data.guestEmail, 'Guest email').toLowerCase();
   // Bound and normalize before building room-night locks, even for anonymous invalid requests.
   const { checkIn, checkOut } = hotelStayDates(data.checkInDate, data.checkOutDate);
-  const guestAccessToken = createGuestAccessToken();
+  let guestAccessToken = '';
   const accountId = guestAccountId(context);
 
   if (!/^[a-zA-Z0-9_-]{32,128}$/.test(String(data.idempotencyKey || ''))) throw new Error('A random stable booking attempt key is required.');
@@ -60,8 +60,8 @@ async function createStorefrontBooking(
     if (replay) {
       const id = replay.afterSnapshot?.bookingId;
       if (!id) throw new Error('Booking attempt recovery evidence is missing.');
-      // The unguessable attempt capability and exact payload bind recovery; rotate guest proof after a lost response.
-      await tx.prisma.booking.update({ where: { id }, data: { guestAccessTokenHash: hashGuestAccessToken(guestAccessToken), guestAccessTokenIssuedAt: new Date() } });
+      // The unguessable attempt capability and exact payload bind recovery; hand back the booking's guest token.
+      guestAccessToken = await sharedGuestAccessToken(tx.prisma, id);
       return tx.sudo().query.Booking.findOne({ where: { id }, query: STOREFRONT_BOOKING_QUERY });
     }
     await lockRoomInventory(tx.prisma, data.roomTypeId, checkIn, checkOut);
@@ -96,9 +96,9 @@ async function createStorefrontBooking(
         status: 'pending', paymentStatus: 'unpaid', source: 'website',
         holdExpiresAt: new Date(Date.now() + 30 * 60_000),
         specialRequests: data.specialRequests?.trim() || '',
-        guestAccessTokenHash: hashGuestAccessToken(guestAccessToken), guestAccessTokenIssuedAt: new Date(),
       },
     });
+    guestAccessToken = await sharedGuestAccessToken(tx.prisma, created.id);
     const averageNightMinor = Math.round(quote.roomSubtotalMinor / quote.nightlyRates.length);
     await tx.prisma.roomAssignment.create({
       data: {
