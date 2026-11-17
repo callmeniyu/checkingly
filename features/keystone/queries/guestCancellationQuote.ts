@@ -41,6 +41,13 @@ export default async function guestCancellationQuote(
       fullRefundDeadline: null, canCancel: false, currencyCode: booking.currencyCode || 'USD',
     };
   }
+  if (booking.status === 'pending' && capturedMinor === 0) {
+    return {
+      policy: 'flexible', refundableMinor: 0, cancellationFeeMinor: 0, capturedMinor,
+      summary: 'Nothing has been paid. Cancelling releases the room without a fee.',
+      fullRefundDeadline: null, canCancel: true, currencyCode: booking.currencyCode || 'USD',
+    };
+  }
   const terms = calculateCancellationTerms({
     policy,
     checkInDate: (booking.pricingSnapshot as any)?.arrivalInstant || booking.checkInDate,

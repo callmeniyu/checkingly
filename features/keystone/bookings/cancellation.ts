@@ -199,7 +199,9 @@ export async function requestBookingCancellation({
     if (channelTermsUnknown && source !== 'channel' && !abandoned) {
       throw new Error('This channel reservation has no recorded cancellation terms. Cancel it in the booking channel.');
     }
-    const cancellationTerms = abandoned ? { policy: 'flexible' as const, refundableMinor: availableCapturedMinor, cancellationFeeMinor: 0, capturedMinor: availableCapturedMinor, summary: 'Unconfirmed reservation released without a cancellation fee. Any received payment is being returned.', fullRefundDeadline: null }
+    // An unconfirmed hold with nothing paid is released like an expired hold: no fee is billed.
+    const unpaidHold = booking.status === 'pending' && availableCapturedMinor === 0
+    const cancellationTerms = abandoned || unpaidHold ? { policy: 'flexible' as const, refundableMinor: availableCapturedMinor, cancellationFeeMinor: 0, capturedMinor: availableCapturedMinor, summary: 'Unconfirmed reservation released without a cancellation fee. Any received payment is being returned.', fullRefundDeadline: null }
       : channelTermsUnknown ? { policy: 'flexible' as const, refundableMinor: 0, cancellationFeeMinor: 0, capturedMinor: availableCapturedMinor, summary: 'Cancelled by the booking channel. Any refund follows the channel’s own terms.', fullRefundDeadline: null }
       : calculateCancellationTerms({
       policy,
