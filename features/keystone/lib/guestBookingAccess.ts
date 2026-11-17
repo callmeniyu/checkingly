@@ -190,6 +190,11 @@ export async function issueGuestBookingAccess(context: any, bookingId: string) {
   return token;
 }
 
+/** The lookup token for a booking is derived from its issue time, so every device that looks it up gets the same one. */
+function lookupAccessToken(bookingId: string, issuedAt: Date) {
+  return createHmac('sha256', getGuestAccessSecret()).update(`guest-lookup:${bookingId}:${issuedAt.toISOString()}`).digest('base64url');
+}
+
 export async function verifyBookingEmailOwnership(
   context: any,
   booking: { id: string; guestEmail?: string | null },
@@ -199,7 +204,19 @@ export async function verifyBookingEmailOwnership(
     throw new Error(BOOKING_ACCESS_DENIED_MESSAGE);
   }
 
-  await issueGuestBookingAccess(context, booking.id);
+  // Looking the booking up again (another device) keeps the current lookup token, so earlier devices stay signed in.
+  const current = await context.prisma.booking.findUnique({ where: { id: booking.id }, select: { guestAccessTokenHash: true, guestAccessTokenIssuedAt: true } });
+  if (current?.guestAccessTokenIssuedAt) {
+    const token = lookupAccessToken(booking.id, current.guestAccessTokenIssuedAt);
+    if (guestAccessTokenMatches(current.guestAccessTokenHash, token)) {
+      setGuestBookingAccess(context, booking.id, token);
+      return;
+    }
+  }
+  const issuedAt = new Date();
+  const token = lookupAccessToken(booking.id, issuedAt);
+  await context.prisma.booking.update({ where: { id: booking.id }, data: { guestAccessTokenHash: hashGuestAccessToken(token), guestAccessTokenIssuedAt: issuedAt } });
+  setGuestBookingAccess(context, booking.id, token);
 }
 
 export async function ensureBookingHasGuestAccess(context: any, bookingId: string) {
