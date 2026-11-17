@@ -286,7 +286,7 @@ export function FoliosPage() {
       meta={(
         <>
           <MetaItem icon={CalendarDays}>Business date {businessDate ? formatDate(businessDate) : 'unavailable'}</MetaItem>
-          <MetaItem icon={CalendarCheck}>Closes automatically at 3am property time</MetaItem>
+          <MetaItem icon={CalendarCheck}>Closes when the night audit is run</MetaItem>
           {businessDateCurrent === false ? <MetaItem icon={AlertTriangle}><span className="text-amber-700 dark:text-amber-400">Readiness reports the business date is behind</span></MetaItem> : null}
         </>
       )}

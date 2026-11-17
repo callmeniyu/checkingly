@@ -42,6 +42,9 @@ function businessDayKey(value: string | Date) {
 export function assertCheckInOnOpenBusinessDate(arrivalDate: string | Date, currentBusinessDate: string | Date) {
   const arrivalDay = businessDayKey(arrivalDate);
   const businessDay = businessDayKey(currentBusinessDate);
+  if (arrivalDay > businessDay) {
+    throw new Error(`The business date is still ${businessDay}. Run the night audit to close it before checking in arrivals for ${arrivalDay}.`);
+  }
   if (arrivalDay !== businessDay) {
     throw new Error(`Check-in is only allowed on the reservation arrival business date ${arrivalDay}; current business date is ${businessDay}.`);
   }
