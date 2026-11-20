@@ -40,13 +40,14 @@ export default function HotelApprovalsPage() {
   const attempts = React.useRef(new Map<string, string>());
   const [offset, setOffset] = React.useState(0);
   const [nextOffset, setNextOffset] = React.useState<number | null>(null);
+  const [canDecide, setCanDecide] = React.useState(false);
 
   async function run(operation: () => Promise<void>, pageOffset = offset) {
     setBusy(true); setFeedback(null);
     try {
       await operation();
       const page = await loadHotelApprovals(pageOffset);
-      setRows(page.rows); setOffset(pageOffset); setNextOffset(page.nextOffset);
+      setRows(page.rows); setOffset(pageOffset); setNextOffset(page.nextOffset); setCanDecide(Boolean(page.canDecide));
     } catch (error) {
       setFeedback({ tone: 'error', text: error instanceof Error ? error.message : 'Approval operation failed.' });
     } finally { setBusy(false); setLoaded(true); }
@@ -182,7 +183,8 @@ export default function HotelApprovalsPage() {
 
                     {decision?.evidence?.reason ? <p className="text-xs text-muted-foreground">Decision note: {decision.evidence.reason}</p> : null}
 
-                    {!decision ? (
+                    {!decision && !canDecide ? <p className="text-xs text-muted-foreground">Awaiting a decision from a staff member with approval authority.</p> : null}
+                    {!decision && canDecide ? (
                       <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-center">
                         <FieldInput aria-label={`Decision reason for ${row.approvalId}`} placeholder="Decision reason (required)" value={decisionNotes[row.approvalId] || ''} onChange={event => setDecisionNotes(current => ({ ...current, [row.approvalId]: event.target.value }))} />
                         <div className="flex shrink-0 gap-2">

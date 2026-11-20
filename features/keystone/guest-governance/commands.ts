@@ -230,7 +230,7 @@ export async function hotelApprovalWorkspace(_root: unknown, { offset = 0 }: { o
   const requests = await context.prisma.hotelAuditEvent.findMany({ where: { propertyKey: HOTEL_PROPERTY_KEY, aggregateType: 'hotel_approval', action: 'request' }, take: 101, skip: offset, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] });
   const page = requests.slice(0, 100);
   const rows = page.length ? await context.prisma.hotelAuditEvent.findMany({ where: { propertyKey: HOTEL_PROPERTY_KEY, aggregateType: 'hotel_approval', aggregateId: { in: page.map((row: any) => row.aggregateId) } }, orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }] }) : [];
-  return JSON.stringify({ rows: rows.map((row: any) => ({ approvalId: row.aggregateId, action: row.action, occurredAt: row.occurredAt, evidence: row.afterSnapshot })), nextOffset: requests.length > 100 ? offset + 100 : null });
+  return JSON.stringify({ rows: rows.map((row: any) => ({ approvalId: row.aggregateId, action: row.action, occurredAt: row.occurredAt, evidence: row.afterSnapshot })), nextOffset: requests.length > 100 ? offset + 100 : null, canDecide: permissions.canApproveHotelExceptions({ session: context.session }) });
 }
 export async function updateHotelApproval(_root: unknown, { payload, idempotencyKey }: { payload: string; idempotencyKey: string }, context: any) {
   if (payload.length > 10_000) throw new Error('Approval payload too large.');
