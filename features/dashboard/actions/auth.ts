@@ -149,7 +149,7 @@ export async function resetPassword(
 }
 
 export async function getAuthenticatedUser() {
-  return keystoneClient(`
+  const response = await keystoneClient(`
     query AuthenticatedUser {
       authenticatedItem {
         ... on User {
@@ -162,6 +162,13 @@ export async function getAuthenticatedUser() {
       }
     }
   `);
+  // A property that already has room types is set up: never tell its staff "Your hotel is empty".
+  const user = response.success ? (response.data as { authenticatedItem?: { onboardingStatus?: string; role?: { canManageOnboarding?: boolean } } | null })?.authenticatedItem : null;
+  if (user && user.onboardingStatus !== 'completed' && user.role?.canManageOnboarding) {
+    const rooms = await keystoneClient(`query { roomTypesCount }`);
+    if (rooms.success && Number((rooms.data as { roomTypesCount?: number })?.roomTypesCount) > 0) user.onboardingStatus = 'completed';
+  }
+  return response;
 }
 
 export async function getAuthHeaders() {
