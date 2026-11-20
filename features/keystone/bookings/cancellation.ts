@@ -281,7 +281,10 @@ export async function requestBookingCancellation({
       ? (retainedMinor > 0 ? 'partial' : 'unpaid')
       : availableCapturedMinor > 0 && cancellationTerms.refundableMinor === availableCapturedMinor
         ? 'refunded'
-        : booking.paymentStatus;
+        // Everything captured was already refunded before this cancellation: the stay reads Refunded, not Unpaid.
+        : captures.length > 0 && availableCapturedMinor === 0
+          ? 'refunded'
+          : booking.paymentStatus;
     const now = new Date();
     const updated = requirePrismaResult(await prisma.booking.update({
       where: { id: bookingId },
